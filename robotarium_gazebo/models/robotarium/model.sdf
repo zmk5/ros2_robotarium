@@ -1,0 +1,145 @@
+<?xml version="1.0" ?>
+<sdf version="1.7">
+  <model name="robotarium">
+    <static>true</static> <!-- Wall will be immovable -->
+    <link name="link_1">
+      <pose>4 0 0.124 0 0 0</pose>
+      <visual name="visual">
+        <material>
+          <script>
+            <name>Gazebo/Red</name>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+          </script>
+        </material>
+        <geometry>
+          <box>
+            <size>0.02 4.0 0.246</size>
+          </box>
+        </geometry>
+      </visual>
+      <inertial>
+        <mass>1.0</mass>
+        <inertia>
+          <ixx>1.0</ixx>
+          <ixy>0.0</ixy>
+          <ixz>0.0</ixz>
+          <iyy>1.0</iyy>
+          <iyz>0.0</iyz>
+          <izz>1.0</izz>
+        </inertia>
+      </inertial>
+      <collision name="collision">
+        <geometry>
+          <box>
+            <size>0.02 4.0 0.246</size>
+          </box>
+        </geometry>
+      </collision>
+    </link>
+
+    <link name="link_2">
+      <pose>0 2 0.124 0 0 1.57</pose>
+      <visual name="visual">
+        <material>
+          <script>
+            <name>Gazebo/Red</name>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+          </script>
+        </material>
+        <geometry>
+          <box>
+            <size>0.02 8.0 0.246</size>
+          </box>
+        </geometry>
+      </visual>
+      <inertial>
+        <mass>1.0</mass>
+        <inertia>
+          <ixx>1.0</ixx>
+          <ixy>0.0</ixy>
+          <ixz>0.0</ixz>
+          <iyy>1.0</iyy>
+          <iyz>0.0</iyz>
+          <izz>1.0</izz>
+        </inertia>
+      </inertial>
+      <collision name="collision">
+        <geometry>
+          <box>
+            <size>0.02 8.0 0.246</size>
+          </box>
+        </geometry>
+      </collision>
+    </link>
+
+    <link name="link_3">
+      <pose>-4 0 0.124 0 0 0</pose>
+      <visual name="visual">
+        <material>
+          <script>
+            <name>Gazebo/Red</name>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+          </script>
+        </material>
+        <geometry>
+          <box>
+            <size>0.02 4.0 0.246</size>
+          </box>
+        </geometry>
+      </visual>
+      <inertial>
+        <mass>1.0</mass>
+        <inertia>
+          <ixx>1.0</ixx>
+          <ixy>0.0</ixy>
+          <ixz>0.0</ixz>
+          <iyy>1.0</iyy>
+          <iyz>0.0</iyz>
+          <izz>1.0</izz>
+        </inertia>
+      </inertial>
+      <collision name="collision">
+        <geometry>
+          <box>
+            <size>0.02 4.0 0.246</size>
+          </box>
+        </geometry>
+      </collision>
+    </link>
+
+    <link name="link_4">
+      <pose>0 -2 0.124 0 0 -1.57</pose>
+      <visual name="visual">
+        <material>
+          <script>
+            <name>Gazebo/Red</name>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+          </script>
+        </material>
+        <geometry>
+          <box>
+            <size>0.02 8.0 0.246</size>
+          </box>
+        </geometry>
+      </visual>
+      <inertial>
+        <mass>1.0</mass>
+        <inertia>
+          <ixx>1.0</ixx>
+          <ixy>0.0</ixy>
+          <ixz>0.0</ixz>
+          <iyy>1.0</iyy>
+          <iyz>0.0</iyz>
+          <izz>1.0</izz>
+        </inertia>
+      </inertial>
+      <collision name="collision">
+        <geometry>
+          <box>
+            <size>0.02 8.0 0.246</size>
+          </box>
+        </geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>
