@@ -72,3 +72,9 @@ Congratulations! You have no started your first ROS2 Robotarium simulation!
 ## Tutorials
 
 **UNDER CONSTRUCTION**
+
+## Citation
+
+If you do plan on using this system, I urge you to cite the original Robotarium if you can!
+
+[Here is the paper!](https://liwanggt.github.io/files/Robotarium_CSM_Impact.pdf)
