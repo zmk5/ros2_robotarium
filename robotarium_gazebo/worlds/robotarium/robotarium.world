@@ -10,10 +10,6 @@
       <uri>model://sun</uri>
     </include>
 
-    <include>
-      <uri>model://robotarium</uri>
-    </include>
-
     <scene>
       <shadows>false</shadows>
     </scene>
@@ -46,6 +42,13 @@
         </constraints>
       </ode>
     </physics>
+
+    <model name='robotarium_arena'>
+      <static>true</static>
+      <include>
+        <uri>model://robotarium</uri>
+      </include>
+    </model>
 
   </world>
 </sdf>
