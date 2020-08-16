@@ -1,4 +1,4 @@
-"""Script used to spawn a robot in a generic position.
+"""Script used to spawn a GRITSBot X in a user-defined position.
 
 Written by: Zahi Kakish (zmk5)
 """
