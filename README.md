@@ -66,7 +66,7 @@ You should get the following arena:
 
 ![You're first ROS2 Robotarium simulation!](robotarium_docs/images/first_sim.jpg)
 
-Congratulations! You have no started your first ROS2 Robotarium simulation!
+Congratulations! You have now started your first ROS2 Robotarium simulation!
 
 
 ## Tutorials
