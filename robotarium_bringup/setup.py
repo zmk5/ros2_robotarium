@@ -27,6 +27,7 @@ setup(
     entry_points={
         'console_scripts': [
             'spawn_gritsbotx = robotarium_bringup.spawn_gritsbotx:main',
+            'spawn_robot = robotarium_bringup.spawn_robot:main',
         ],
     },
 )
