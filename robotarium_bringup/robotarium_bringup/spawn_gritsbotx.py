@@ -4,12 +4,35 @@ Written by: Zahi Kakish (zmk5)
 """
 import os
 import sys
+from typing import Tuple
 
 from ament_index_python.packages import get_package_share_directory
 
 from gazebo_msgs.srv import SpawnEntity
 
+import numpy as np
+
 import rclpy
+
+
+def to_quaternion(
+        roll: float,
+        pitch: float,
+        yaw: float) -> Tuple[float, float, float, float]:
+    """Convert Euler to Quaternion."""
+    c_r = np.cos(roll * 0.5)
+    s_r = np.sin(roll * 0.5)
+    c_p = np.cos(pitch * 0.5)
+    s_p = np.sin(pitch * 0.5)
+    c_y = np.cos(yaw * 0.5)
+    s_y = np.sin(yaw * 0.5)
+
+    x = s_r * c_p * c_y - c_r * s_p * s_y
+    y = c_r * s_p * c_y + s_r * c_p * s_y
+    z = c_r * c_p * s_y - s_r * s_p * c_y
+    w = c_r * c_p * c_y + s_r * s_p * s_y
+
+    return (x, y, z, w)
 
 
 def main():
@@ -42,9 +65,18 @@ def main():
     request.name = argv[0]  # 'gritsbot_0'
     request.xml = open(sdf_file_path, 'r').read()
     request.robot_namespace = argv[1]  # 'gb_0'
+
+    # Set robot postion
     request.initial_pose.position.x = float(argv[2])  # 5.0
     request.initial_pose.position.y = float(argv[3])  # 5.0
     request.initial_pose.position.z = float(argv[4])  # 0.1
+
+    # Set robot orientation
+    quaternion = to_quaternion(float(argv[5]), float(argv[6]), float(argv[7]))
+    request.initial_pose.orientation.x = quaternion[0]
+    request.initial_pose.orientation.y = quaternion[1]
+    request.initial_pose.orientation.z = quaternion[2]
+    request.initial_pose.orientation.w = quaternion[3]
 
     node.get_logger().info('Sending service request to `/spawn_entity`')
     future = client.call_async(request)

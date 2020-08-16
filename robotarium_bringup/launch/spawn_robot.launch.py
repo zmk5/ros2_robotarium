@@ -46,11 +46,19 @@ def generate_launch_description():
     # Get input arguments
     input_args = get_args()
 
+    pos_y = '1.45'
+    neg_y = '-1.45'
+    def_z = '0.91'
+    x_val = [
+        0.38 * -1, 0.38 * -2, 0.38 * -3, 0.38 * -4, 0.38 * -5,
+        0.38 * 0.0,
+        0.38 * 1, 0.38 * 2, 0.38 * 3, 0.38 * 4, 0.38 * 5]
+
     # use_sim_time = LaunchConfiguration('use_sim_time', default='true')
 
     worlds_file_path = os.path.join(
         get_package_share_directory('robotarium_gazebo'), 'worlds',
-        'empty/empty.world')
+        'robotarium/robotarium.world')
     rclpy.logging.get_logger('Launch File').info(worlds_file_path)
 
     sdf_file_path = os.path.join(
@@ -58,29 +66,54 @@ def generate_launch_description():
         'gritsbotx/model.sdf')
     rclpy.logging.get_logger('Launch File').info(sdf_file_path)
 
-    return LaunchDescription([
+    experiment_launch_description = LaunchDescription([
         ExecuteProcess(
             cmd=['gazebo', '--verbose', worlds_file_path, '-s',
                  'libgazebo_ros_factory.so'],
             output='screen'
         ),
-        # ExecuteProcess(
-        #     cmd=['ros2', 'param', 'set', '/gazebo', 'use_sim_time',
-        #          use_sim_time],
-        #     output='screen'
-        # ),
-        Node(
-            package='herding_ros_gazebo',
-            executable='spawn_robot',
-            name='test_spawn',
-            output='screen',
-            namespace='',
-            arguments=[
-                'robot_0',  # Name
-                '',  # Namespace
-                '0.0',  # X
-                '0.0',  # Y
-                '0.0',  # Z
-            ]
-        ),
     ])
+
+    for i in range(11):
+        experiment_launch_description.add_entity(
+            Node(
+                package='robotarium_bringup',
+                executable='spawn_gritsbotx',
+                name='test_spawn',
+                output='screen',
+                namespace='',
+                arguments=[
+                    f'robot_{i}',  # Name
+                    f'gb_{i}',  # Namespace
+                    str(x_val[i]),  # X
+                    pos_y,  # Y
+                    def_z,  # Z
+                    '0',  # Roll
+                    '0',  # Pitch
+                    '-1.57',  # Yaw
+                ]
+            )
+        )
+
+    for i in range(11):
+        experiment_launch_description.add_entity(
+            Node(
+                package='robotarium_bringup',
+                executable='spawn_gritsbotx',
+                name='test_spawn',
+                output='screen',
+                namespace='',
+                arguments=[
+                    f'robot_{i + 11}',  # Name
+                    f'gb_{i + 11}',  # Namespace
+                    str(x_val[i]),  # X
+                    neg_y,  # Y
+                    def_z,  # Z
+                    '0',  # Roll
+                    '0',  # Pitch
+                    '1.57',  # Yaw
+                ]
+            )
+        )
+
+    return experiment_launch_description
