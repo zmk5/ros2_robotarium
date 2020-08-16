@@ -42,8 +42,33 @@ Finally, change directory back to `robotarium_ws`, build using `colcon`, and sou
 ~$ . install/setup.bash
 ```
 
+## Running your first simulation
+
+Before running the simulation, export the location of the GRITSBot and Robotarium arena models provided by the package so Gazebo knows where to locate them:
+
+```bash
+~$ export GAZEBO_MODEL_PATH=$GAZEBO_MODEL_PATH:~/robotarium_ws/src/ros2_robotarium/robotarium_gazebo/models
+```
+
+If you would like to make this permanent, add it to your `.bashrc` file. **Make sure to only run this once though!**
+
+```bash
+~$ echo 'export GAZEBO_MODEL_PATH=$GAZEBO_MODEL_PATH:~/robotarium_ws/src/ros2_robotarium/robotarium_gazebo/models' >> ~/.bashrc
+```
+
+Now you can run a test simulation with the following command:
+
+```bash
+~$ ros2 launch robotarium_bringup spawn_robot.launch.py
+```
+
+You should get the following arena:
+
+![You're first ROS2 Robotarium simulation!](robotarium_docs/images/first_sim.jpg)
+
+Congratulations! You have no started your first ROS2 Robotarium simulation!
+
+
 ## Tutorials
 
-### Running your first simulation
-
-UNDER CONSTRUCTION
+**UNDER CONSTRUCTION**
