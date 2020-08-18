@@ -75,7 +75,7 @@ If you would like to make this permanent, add it to your `.bashrc` file. **Make 
 Now you can run a test simulation with the following command:
 
 ```bash
-~$ ros2 launch robotarium_bringup spawn_robot.launch.py
+~$ ros2 launch robotarium_bringup spawn_robotarium.launch.py
 ```
 
 You should get the following arena:

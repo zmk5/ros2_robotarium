@@ -11,6 +11,7 @@
 
   <exec_depend>robotarium_bringup</exec_depend>
   <exec_depend>robotarium_gazebo</exec_depend>
+  <exec_depend>robotarium_node</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
