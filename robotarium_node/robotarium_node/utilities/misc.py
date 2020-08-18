@@ -1,4 +1,4 @@
-"""Various other functions to use. 
+"""Various other functions to use.
 
 Written by: The Robotarium Team
 Modified by: Zahi Kakish (zmk5)

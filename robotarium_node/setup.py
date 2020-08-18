@@ -25,8 +25,6 @@ setup(
     zip_safe=True,
     tests_require=['pytest'],
     entry_points={
-        'console_scripts': [
-            'si_go_to_point = robotarium_node.examples.go_to_point.si_go_to_point:main'
-        ],
+        'console_scripts': [],
     },
 )

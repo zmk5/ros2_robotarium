@@ -1,3 +1,11 @@
+"""Single Integrator go-to-point Example.
+
+TODO: UPDATE DESCRIPTION
+
+Written by: The Robotarium Team
+Modified by: Zahi Kakish (zmk5)
+
+"""
 import robotarium_node.robotarium as robotarium
 from robotarium_node.utilities.transformations import *
 from robotarium_node.utilities.barrier_certificates import *
@@ -8,8 +16,8 @@ import numpy as np
 import time
 
 
-def main():
-    """Run `Single Integrator go to point` script."""
+def main() -> None:
+    """Run script."""
     # Instantiate Robotarium object
     N = 5
     initial_conditions = np.array(
