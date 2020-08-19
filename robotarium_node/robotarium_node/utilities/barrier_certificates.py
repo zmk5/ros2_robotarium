@@ -4,16 +4,19 @@ Written by: The Robotarium Team
 Modified by: Zahi Kakish (zmk5)
 
 """
+from typing import Callable
+from typing import Union
+
 from cvxopt import matrix
 from cvxopt.blas import dot
 from cvxopt.solvers import qp, options
 from cvxopt import matrix, sparse
 
+import numpy as np
+
 # Unused for now, will include later for speed.
 # import quadprog as solver2
-
 import itertools
-import numpy as np
 from scipy.special import comb
 
 from robotarium_node.utilities.transformations import *
@@ -21,44 +24,55 @@ from robotarium_node.utilities.transformations import *
 # Disable output of CVXOPT
 options['show_progress'] = False
 # Change default options of CVXOPT for faster solving
-options['reltol'] = 1e-2 # was e-2
-options['feastol'] = 1e-2 # was e-4
-options['maxiters'] = 50 # default is 100
+options['reltol'] = 1e-2  # was e-2
+options['feastol'] = 1e-2  # was e-4
+options['maxiters'] = 50  # default is 100
 
-def create_single_integrator_barrier_certificate(barrier_gain=100, safety_radius=0.17, magnitude_limit=0.2):
-    """Create a barrier certificate for a single-integrator system.  This function
-    returns another function for optimization reasons.
 
-    barrier_gain: double (controls how quickly agents can approach each other.  lower = slower)
-    safety_radius: double (how far apart the agents will stay)
-    magnitude_limit: how fast the robot can move linearly.
+def create_single_integrator_barrier_certificate(
+        barrier_gain: Union[int, float] = 100,
+        safety_radius: float = 0.17,
+        magnitude_limit: float = 0.2) -> Callable:
+    """Create a barrier certificate for a single-integrator system.
 
-    -> function (the barrier certificate function)
+    NOTE: This function returns another function for optimization reasons.
+
+    Parameters
+    ----------
+    barrier_gain : float
+        Controls how quickly agents can approach each other. (lower = slower)
+    safety_radius : float
+        How far apart the agents will stay.
+    magnitude_limit : float
+        How fast the robot can move linearly.
+
+    Returns
+    -------
+    A callable function (the barrier certificate function).
     """
+    # Check user input types
+    assert isinstance(barrier_gain, (int, float)), f'In the function create_single_integrator_barrier_certificate, the barrier gain (barrier_gain) must be an integer or float. Recieved type {type(barrier_gain).__name__}.'
+    assert isinstance(safety_radius, (int, float)), f'In the function create_single_integrator_barrier_certificate, the safe distance between robots (safety_radius) must be an integer or float. Recieved type {type(safety_radius).__name__}.'
+    assert isinstance(magnitude_limit, (int, float)), f'In the function create_single_integrator_barrier_certificate, the maximum linear velocity of the robot (magnitude_limit) must be an integer or float. Recieved type {type(magnitude_limit).__name__}.'
 
-    #Check user input types
-    assert isinstance(barrier_gain, (int, float)), 'In the function create_single_integrator_barrier_certificate, the barrier gain (barrier_gain) must be an integer or float. Recieved type %r.' % type(barrier_gain).__name__
-    assert isinstance(safety_radius, (int, float)), 'In the function create_single_integrator_barrier_certificate, the safe distance between robots (safety_radius) must be an integer or float. Recieved type %r.' % type(safety_radius).__name__
-    assert isinstance(magnitude_limit, (int, float)), 'In the function create_single_integrator_barrier_certificate, the maximum linear velocity of the robot (magnitude_limit) must be an integer or float. Recieved type %r.' % type(magnitude_limit).__name__
-
-    #Check user input ranges/sizes
-    assert barrier_gain > 0, 'In the function create_single_integrator_barrier_certificate, the barrier gain (barrier_gain) must be positive. Recieved %r.' % barrier_gain
-    assert safety_radius >= 0.12, 'In the function create_single_integrator_barrier_certificate, the safe distance between robots (safety_radius) must be greater than or equal to the diameter of the robot (0.12m) plus the distance to the look ahead point used in the diffeomorphism if that is being used. Recieved %r.' % safety_radius
-    assert magnitude_limit > 0, 'In the function create_single_integrator_barrier_certificate, the maximum linear velocity of the robot (magnitude_limit) must be positive. Recieved %r.' % magnitude_limit
-    assert magnitude_limit <= 0.2, 'In the function create_single_integrator_barrier_certificate, the maximum linear velocity of the robot (magnitude_limit) must be less than the max speed of the robot (0.2m/s). Recieved %r.' % magnitude_limit
+    # Check user input ranges/sizes
+    assert barrier_gain > 0, f'In the function create_single_integrator_barrier_certificate, the barrier gain (barrier_gain) must be positive. Recieved {barrier_gain}.'
+    assert safety_radius >= 0.12, f'In the function create_single_integrator_barrier_certificate, the safe distance between robots (safety_radius) must be greater than or equal to the diameter of the robot (0.12m) plus the distance to the look ahead point used in the diffeomorphism if that is being used. Recieved {safety_radius}.'
+    assert magnitude_limit > 0, f'In the function create_single_integrator_barrier_certificate, the maximum linear velocity of the robot (magnitude_limit) must be positive. Recieved {magnitude_limit}.'
+    assert magnitude_limit <= 0.2, f'In the function create_single_integrator_barrier_certificate, the maximum linear velocity of the robot (magnitude_limit) must be less than the max speed of the robot (0.2m/s). Recieved {magnitude_limit}.'
 
 
-    def f(dxi, x):
-        #Check user input types
-        assert isinstance(dxi, np.ndarray), 'In the function created by the create_single_integrator_barrier_certificate function, the single-integrator robot velocity command (dxi) must be a numpy array. Recieved type %r.' % type(dxi).__name__
-        assert isinstance(x, np.ndarray), 'In the function created by the create_single_integrator_barrier_certificate function, the robot states (x) must be a numpy array. Recieved type %r.' % type(x).__name__
+    def f(dxi, x: np.ndarray) -> np.ndarray:
+        """Provide barrier cerfificates for agents."""
+        # Check user input types
+        assert isinstance(dxi, np.ndarray), f'In the function created by the create_single_integrator_barrier_certificate function, the single-integrator robot velocity command (dxi) must be a numpy array. Recieved type {type(dxi).__name__}.'
+        assert isinstance(x, np.ndarray), f'In the function created by the create_single_integrator_barrier_certificate function, the robot states (x) must be a numpy array. Recieved type {type(x).__name__}.'
 
-        #Check user input ranges/sizes
-        assert x.shape[0] == 2, 'In the function created by the create_single_integrator_barrier_certificate function, the dimension of the single integrator robot states (x) must be 2 ([x;y]). Recieved dimension %r.' % x.shape[0]
-        assert dxi.shape[0] == 2, 'In the function created by the create_single_integrator_barrier_certificate function, the dimension of the robot single integrator velocity command (dxi) must be 2 ([x_dot;y_dot]). Recieved dimension %r.' % dxi.shape[0]
-        assert x.shape[1] == dxi.shape[1], 'In the function created by the create_single_integrator_barrier_certificate function, the number of robot states (x) must be equal to the number of robot single integrator velocity commands (dxi). Recieved a current robot pose input array (x) of size %r x %r and single integrator velocity array (dxi) of size %r x %r.' % (x.shape[0], x.shape[1], dxi.shape[0], dxi.shape[1])
+        # Check user input ranges/sizes
+        assert x.shape[0] == 2, f'In the function created by the create_single_integrator_barrier_certificate function, the dimension of the single integrator robot states (x) must be 2 ([x;y]). Recieved dimension {x.shape[0]}.'
+        assert dxi.shape[0] == 2, f'In the function created by the create_single_integrator_barrier_certificate function, the dimension of the robot single integrator velocity command (dxi) must be 2 ([x_dot;y_dot]). Recieved dimension {dxi.shape[0]}.'
+        assert x.shape[1] == dxi.shape[1], f'In the function created by the create_single_integrator_barrier_certificate function, the number of robot states (x) must be equal to the number of robot single integrator velocity commands (dxi). Recieved a current robot pose input array (x) of size {x.shape[0]} x {x.shape[1]} and single integrator velocity array (dxi) of size {dxi.shape[0]} x {dxi.shape[1]}.'
 
-        
         # Initialize some variables for computational savings
         N = dxi.shape[1]
         num_constraints = int(comb(N, 2))
@@ -90,47 +104,62 @@ def create_single_integrator_barrier_certificate(barrier_gain=100, safety_radius
 
     return f
 
-def create_single_integrator_barrier_certificate_with_boundary(barrier_gain=100, safety_radius=0.17, magnitude_limit=0.2, boundary_points = np.array([-1.6, 1.6, -1.0, 1.0])):
-    """Creates a barrier certificate for a single-integrator system with a rectangular boundary included.  This function
-    returns another function for optimization reasons.
 
-    barrier_gain: double (controls how quickly agents can approach each other.  lower = slower)
-    safety_radius: double (how far apart the agents will stay)
-    magnitude_limit: how fast the robot can move linearly.
+def create_single_integrator_barrier_certificate_with_boundary(
+        barrier_gain: Union[int, float] = 100,
+        safety_radius: float = 0.17,
+        magnitude_limit: float = 0.2,
+        boundary_points: np.ndarray = np.array([-1.6, 1.6, -1.0, 1.0])) -> Callable:
+    """Create a SI barrier certificate for a rectangular boundary.
 
-    -> function (the barrier certificate function)
+    Creates a barrier certificate for a single-integrator system with a
+    rectangular boundary included. NOTE: This function returns another function
+    for optimization reasons.
+
+    Parameters
+    ----------
+    barrier_gain : float
+        Controls how quickly agents can approach each other. (lower = slower)
+    safety_radius : float
+        How far apart the agents will stay.
+    magnitude_limit : float
+        How fast the robot can move linearly.
+    boundary_points : np.ndarray
+        The boundary of the robotarium arena to bound the barrier certificates.
+
+    Returns
+    -------
+    A callable function (the barrier certificate function).
     """
+    # Check user input types
+    assert isinstance(barrier_gain, (int, float)), f'In the function create_single_integrator_barrier_certificate, the barrier gain (barrier_gain) must be an integer or float. Recieved type {type(barrier_gain).__name__}.'
+    assert isinstance(safety_radius, (int, float)), f'In the function create_single_integrator_barrier_certificate, the safe distance between robots (safety_radius) must be an integer or float. Recieved type {type(safety_radius).__name__}.'
+    assert isinstance(magnitude_limit, (int, float)), f'In the function create_single_integrator_barrier_certificate, the maximum linear velocity of the robot (magnitude_limit) must be an integer or float. Recieved type {type(magnitude_limit).__name__}.'
 
-    #Check user input types
-    assert isinstance(barrier_gain, (int, float)), 'In the function create_single_integrator_barrier_certificate, the barrier gain (barrier_gain) must be an integer or float. Recieved type %r.' % type(barrier_gain).__name__
-    assert isinstance(safety_radius, (int, float)), 'In the function create_single_integrator_barrier_certificate, the safe distance between robots (safety_radius) must be an integer or float. Recieved type %r.' % type(safety_radius).__name__
-    assert isinstance(magnitude_limit, (int, float)), 'In the function create_single_integrator_barrier_certificate, the maximum linear velocity of the robot (magnitude_limit) must be an integer or float. Recieved type %r.' % type(magnitude_limit).__name__
-
-    #Check user input ranges/sizes
-    assert barrier_gain > 0, 'In the function create_single_integrator_barrier_certificate, the barrier gain (barrier_gain) must be positive. Recieved %r.' % barrier_gain
-    assert safety_radius >= 0.12, 'In the function create_single_integrator_barrier_certificate, the safe distance between robots (safety_radius) must be greater than or equal to the diameter of the robot (0.12m) plus the distance to the look ahead point used in the diffeomorphism if that is being used. Recieved %r.' % safety_radius
-    assert magnitude_limit > 0, 'In the function create_single_integrator_barrier_certificate, the maximum linear velocity of the robot (magnitude_limit) must be positive. Recieved %r.' % magnitude_limit
-    assert magnitude_limit <= 0.2, 'In the function create_single_integrator_barrier_certificate, the maximum linear velocity of the robot (magnitude_limit) must be less than the max speed of the robot (0.2m/s). Recieved %r.' % magnitude_limit
+    # Check user input ranges/sizes
+    assert barrier_gain > 0, f'In the function create_single_integrator_barrier_certificate, the barrier gain (barrier_gain) must be positive. Recieved {barrier_gain}.'
+    assert safety_radius >= 0.12, f'In the function create_single_integrator_barrier_certificate, the safe distance between robots (safety_radius) must be greater than or equal to the diameter of the robot (0.12m) plus the distance to the look ahead point used in the diffeomorphism if that is being used. Recieved {safety_radius}.'
+    assert magnitude_limit > 0, f'In the function create_single_integrator_barrier_certificate, the maximum linear velocity of the robot (magnitude_limit) must be positive. Recieved {magnitude_limit}.'
+    assert magnitude_limit <= 0.2, f'In the function create_single_integrator_barrier_certificate, the maximum linear velocity of the robot (magnitude_limit) must be less than the max speed of the robot (0.2m/s). Recieved {magnitude_limit}.'
 
 
-    def f(dxi, x):
-        #Check user input types
-        assert isinstance(dxi, np.ndarray), 'In the function created by the create_single_integrator_barrier_certificate function, the single-integrator robot velocity command (dxi) must be a numpy array. Recieved type %r.' % type(dxi).__name__
-        assert isinstance(x, np.ndarray), 'In the function created by the create_single_integrator_barrier_certificate function, the robot states (x) must be a numpy array. Recieved type %r.' % type(x).__name__
+    def f(dxi: np.ndarray, x: np.ndarray) -> np.ndarray:
+        # Check user input types
+        assert isinstance(dxi, np.ndarray), f'In the function created by the create_single_integrator_barrier_certificate function, the single-integrator robot velocity command (dxi) must be a numpy array. Recieved type {type(dxi).__name__}.'
+        assert isinstance(x, np.ndarray), f'In the function created by the create_single_integrator_barrier_certificate function, the robot states (x) must be a numpy array. Recieved type {type(x).__name__}.'
 
-        #Check user input ranges/sizes
-        assert x.shape[0] == 2, 'In the function created by the create_single_integrator_barrier_certificate function, the dimension of the single integrator robot states (x) must be 2 ([x;y]). Recieved dimension %r.' % x.shape[0]
-        assert dxi.shape[0] == 2, 'In the function created by the create_single_integrator_barrier_certificate function, the dimension of the robot single integrator velocity command (dxi) must be 2 ([x_dot;y_dot]). Recieved dimension %r.' % dxi.shape[0]
-        assert x.shape[1] == dxi.shape[1], 'In the function created by the create_single_integrator_barrier_certificate function, the number of robot states (x) must be equal to the number of robot single integrator velocity commands (dxi). Recieved a current robot pose input array (x) of size %r x %r and single integrator velocity array (dxi) of size %r x %r.' % (x.shape[0], x.shape[1], dxi.shape[0], dxi.shape[1])
+        # Check user input ranges/sizes
+        assert x.shape[0] == 2, f'In the function created by the create_single_integrator_barrier_certificate function, the dimension of the single integrator robot states (x) must be 2 ([x;y]). Recieved dimension {x.shape[0]}.'
+        assert dxi.shape[0] == 2, f'In the function created by the create_single_integrator_barrier_certificate function, the dimension of the robot single integrator velocity command (dxi) must be 2 ([x_dot;y_dot]). Recieved dimension {dxi.shape[0]}.'
+        assert x.shape[1] == dxi.shape[1], f'In the function created by the create_single_integrator_barrier_certificate function, the number of robot states (x) must be equal to the number of robot single integrator velocity commands (dxi). Recieved a current robot pose input array (x) of size {x.shape[0]} x {x.shape[1]} and single integrator velocity array (dxi) of size {dxi.shape[0]} x {dxi.shape[1]}.'
 
-        
         # Initialize some variables for computational savings
         N = dxi.shape[1]
-        num_constraints = int(comb(N, 2)) + 4*N
-        A = np.zeros((num_constraints, 2*N))
+        num_constraints = int(comb(N, 2)) + 4 * N
+        A = np.zeros((num_constraints, 2 * N))
         b = np.zeros(num_constraints)
         #H = sparse(matrix(2*np.identity(2*N)))
-        H = 2*np.identity(2*N)
+        H = 2 * np.identity(2 * N)
 
         count = 0
         for i in range(N-1):
@@ -138,40 +167,40 @@ def create_single_integrator_barrier_certificate_with_boundary(barrier_gain=100,
                 error = x[:, i] - x[:, j]
                 h = (error[0]*error[0] + error[1]*error[1]) - np.power(safety_radius, 2)
 
-                A[count, (2*i, (2*i+1))] = -2*error
-                A[count, (2*j, (2*j+1))] = 2*error
-                b[count] = barrier_gain*np.power(h, 3)
+                A[count, (2*i, (2*i+1))] = -2 * error
+                A[count, (2*j, (2*j+1))] = 2 * error
+                b[count] = barrier_gain * np.power(h, 3)
 
                 count += 1
-        
+
         for k in range(N):
-            #Pos Y
-            A[count, (2*k, 2*k+1)] = np.array([0,1])
-            b[count] = 0.4*barrier_gain*(boundary_points[3] - safety_radius/2 - x[1,k])**3;
+            # Pos Y
+            A[count, (2*k, 2*k+1)] = np.array([0, 1])
+            b[count] = 0.4*barrier_gain*(boundary_points[3] - safety_radius/2 - x[1, k])**3;
             count += 1
 
-            #Neg Y
-            A[count, (2*k, 2*k+1)] = -np.array([0,1])
-            b[count] = 0.4*barrier_gain*(-boundary_points[2] - safety_radius/2 + x[1,k])**3;
+            # Neg Y
+            A[count, (2*k, 2*k+1)] = -np.array([0, 1])
+            b[count] = 0.4*barrier_gain*(-boundary_points[2] - safety_radius/2 + x[1, k])**3;
             count += 1
 
-            #Pos X
-            A[count, (2*k, 2*k+1)] = np.array([1,0])
-            b[count] = 0.4*barrier_gain*(boundary_points[1] - safety_radius/2 - x[0,k])**3;
+            # Pos X
+            A[count, (2*k, 2*k+1)] = np.array([1, 0])
+            b[count] = 0.4*barrier_gain*(boundary_points[1] - safety_radius/2 - x[0, k])**3;
             count += 1
 
-            #Neg X
-            A[count, (2*k, 2*k+1)] = -np.array([1,0])
-            b[count] = 0.4*barrier_gain*(-boundary_points[0] - safety_radius/2 + x[0,k])**3;
+            # Neg X
+            A[count, (2*k, 2*k+1)] = -np.array([1, 0])
+            b[count] = 0.4*barrier_gain*(-boundary_points[0] - safety_radius/2 + x[0, k])**3;
             count += 1
-        
+
         # Threshold control inputs before QP
         norms = np.linalg.norm(dxi, 2, 0)
         idxs_to_normalize = (norms > magnitude_limit)
-        dxi[:, idxs_to_normalize] *= magnitude_limit/norms[idxs_to_normalize]
+        dxi[:, idxs_to_normalize] *= magnitude_limit / norms[idxs_to_normalize]
 
-        f = -2*np.reshape(dxi, (2*N,1), order='F')
-        b = np.reshape(b, (count,1), order='F')
+        f = -2*np.reshape(dxi, (2*N, 1), order='F')
+        b = np.reshape(b, (count, 1), order='F')
         result = qp(matrix(H), matrix(f), matrix(A), matrix(b))['x']
         #result = solver2.solve_qp(H, f, A, b, 0)[0]
 
@@ -179,44 +208,57 @@ def create_single_integrator_barrier_certificate_with_boundary(barrier_gain=100,
 
     return f
 
-def create_single_integrator_barrier_certificate2(barrier_gain=100, unsafe_barrier_gain=1e6, safety_radius=0.17, magnitude_limit=0.2):
-    """Creates a barrier certificate for a single-integrator system.  This function
-    returns another function for optimization reasons. This function is different from 
-    create_single_integrator_barrier_certificate as it changes the barrier gain to a large
-    number if the single integrator point enters the unsafe region.
 
-    barrier_gain: double (controls how quickly agents can approach each other.  lower = slower)
-    safety_radius: double (how far apart the agents will stay)
-    magnitude_limit: how fast the robot can move linearly.
+def create_single_integrator_barrier_certificate2(
+        barrier_gain: Union[int, float] = 100,
+        unsafe_barrier_gain: float = 1e6,
+        safety_radius: float = 0.17,
+        magnitude_limit: float = 0.2) -> Callable:
+    """Creates a barrier certificate for a single-integrator system.
 
-    -> function (the barrier certificate function)
+    This function is different from
+    `create_single_integrator_barrier_certificate` as it changes the barrier
+    gain to a large number if the single integrator point enters the unsafe
+    region.
+
+    NOTE: This function returns another function for optimization reasons.
+
+    Parameters
+    ----------
+    barrier_gain : float
+        Controls how quickly agents can approach each other. (lower = slower)
+    safety_radius : float
+        How far apart the agents will stay.
+    magnitude_limit : float
+        How fast the robot can move linearly.
+
+    Returns
+    -------
+    A callable function (the barrier certificate function).
     """
+    # Check user input types
+    assert isinstance(barrier_gain, (int, float)), f'In the function create_single_integrator_barrier_certificate2, the barrier gain inside the safe set (barrier_gain) must be an integer or float. Recieved type {type(barrier_gain).__name__}.'
+    assert isinstance(unsafe_barrier_gain, (int, float)), f'In the function create_single_integrator_barrier_certificate2, the barrier gain if outside the safe set (unsafe_barrier_gain) must be an integer or float. Recieved type {type(unsafe_barrier_gain).__name__}.'
+    assert isinstance(safety_radius, (int, float)), f'In the function create_single_integrator_barrier_certificate2, the safe distance between robots (safety_radius) must be an integer or float. Recieved type {type(safety_radius).__name__}.'
+    assert isinstance(magnitude_limit, (int, float)), f'In the function create_single_integrator_barrier_certificate2, the maximum linear velocity of the robot (magnitude_limit) must be an integer or float. Recieved type {type(magnitude_limit).__name__}.'
 
-    #Check user input types
-    assert isinstance(barrier_gain, (int, float)), 'In the function create_single_integrator_barrier_certificate2, the barrier gain inside the safe set (barrier_gain) must be an integer or float. Recieved type %r.' % type(barrier_gain).__name__
-    assert isinstance(unsafe_barrier_gain, (int, float)), 'In the function create_single_integrator_barrier_certificate2, the barrier gain if outside the safe set (unsafe_barrier_gain) must be an integer or float. Recieved type %r.' % type(unsafe_barrier_gain).__name__
-    assert isinstance(safety_radius, (int, float)), 'In the function create_single_integrator_barrier_certificate2, the safe distance between robots (safety_radius) must be an integer or float. Recieved type %r.' % type(safety_radius).__name__
-    assert isinstance(magnitude_limit, (int, float)), 'In the function create_single_integrator_barrier_certificate2, the maximum linear velocity of the robot (magnitude_limit) must be an integer or float. Recieved type %r.' % type(magnitude_limit).__name__
+    # Check user input ranges/sizes
+    assert barrier_gain > 0, f'In the function create_single_integrator_barrier_certificate2, the barrier gain inside the safe set (barrier_gain) must be positive. Recieved {barrier_gain}.'
+    assert unsafe_barrier_gain > 0, f'In the function create_single_integrator_barrier_certificate2, the barrier gain if outside the safe set (unsafe_barrier_gain) must be positive. Recieved {unsafe_barrier_gain}.'
+    assert safety_radius >= 0.12, f'In the function create_single_integrator_barrier_certificate2, the safe distance between robots (safety_radius) must be greater than or equal to the diameter of the robot (0.12m) plus the distance to the look ahead point used in the diffeomorphism if that is being used. Recieved {safety_radius}.'
+    assert magnitude_limit > 0, f'In the function create_single_integrator_barrier_certificate2, the maximum linear velocity of the robot (magnitude_limit) must be positive. Recieved {magnitude_limit}.'
+    assert magnitude_limit <= 0.2, f'In the function create_single_integrator_barrier_certificate2, the maximum linear velocity of the robot (magnitude_limit) must be less than the max speed of the robot (0.2m/s). Recieved {magnitude_limit}.'
 
-    #Check user input ranges/sizes
-    assert barrier_gain > 0, 'In the function create_single_integrator_barrier_certificate2, the barrier gain inside the safe set (barrier_gain) must be positive. Recieved %r.' % barrier_gain
-    assert unsafe_barrier_gain > 0, 'In the function create_single_integrator_barrier_certificate2, the barrier gain if outside the safe set (unsafe_barrier_gain) must be positive. Recieved %r.' % unsafe_barrier_gain
-    assert safety_radius >= 0.12, 'In the function create_single_integrator_barrier_certificate2, the safe distance between robots (safety_radius) must be greater than or equal to the diameter of the robot (0.12m) plus the distance to the look ahead point used in the diffeomorphism if that is being used. Recieved %r.' % safety_radius
-    assert magnitude_limit > 0, 'In the function create_single_integrator_barrier_certificate2, the maximum linear velocity of the robot (magnitude_limit) must be positive. Recieved %r.' % magnitude_limit
-    assert magnitude_limit <= 0.2, 'In the function create_single_integrator_barrier_certificate2, the maximum linear velocity of the robot (magnitude_limit) must be less than the max speed of the robot (0.2m/s). Recieved %r.' % magnitude_limit
+    def f(dxi: np.ndarray, x: np.ndarray) -> np.ndarray:
+        # Check user input types
+        assert isinstance(dxi, np.ndarray), f'In the function created by the create_single_integrator_barrier_certificate2 function, the single-integrator robot velocity command (dxi) must be a numpy array. Recieved type {type(dxi).__name__}.'
+        assert isinstance(x, np.ndarray), f'In the function created by the create_single_integrator_barrier_certificate2 function, the robot states (x) must be a numpy array. Recieved type {type(x).__name__}.'
 
+        # Check user input ranges/sizes
+        assert x.shape[0] == 2, f'In the function created by the create_single_integrator_barrier_certificate2 function, the dimension of the single integrator robot states (x) must be 2 ([x;y]). Recieved dimension {x.shape[0]}.'
+        assert dxi.shape[0] == 2, f'In the function created by the create_single_integrator_barrier_certificate2 function, the dimension of the robot single integrator velocity command (dxi) must be 2 ([x_dot;y_dot]). Recieved dimension {dxi.shape[0]}.'
+        assert x.shape[1] == dxi.shape[1], f'In the function created by the create_single_integrator_barrier_certificate2 function, the number of robot states (x) must be equal to the number of robot single integrator velocity commands (dxi). Recieved a current robot pose input array (x) of size {x.shape[0]} x {x.shape[1]} and single integrator velocity array (dxi) of size {dxi.shape[0]} x {dxi.shape[1]}.'
 
-    def f(dxi, x):
-        #Check user input types
-        assert isinstance(dxi, np.ndarray), 'In the function created by the create_single_integrator_barrier_certificate2 function, the single-integrator robot velocity command (dxi) must be a numpy array. Recieved type %r.' % type(dxi).__name__
-        assert isinstance(x, np.ndarray), 'In the function created by the create_single_integrator_barrier_certificate2 function, the robot states (x) must be a numpy array. Recieved type %r.' % type(x).__name__
-
-        #Check user input ranges/sizes
-        assert x.shape[0] == 2, 'In the function created by the create_single_integrator_barrier_certificate2 function, the dimension of the single integrator robot states (x) must be 2 ([x;y]). Recieved dimension %r.' % x.shape[0]
-        assert dxi.shape[0] == 2, 'In the function created by the create_single_integrator_barrier_certificate2 function, the dimension of the robot single integrator velocity command (dxi) must be 2 ([x_dot;y_dot]). Recieved dimension %r.' % dxi.shape[0]
-        assert x.shape[1] == dxi.shape[1], 'In the function created by the create_single_integrator_barrier_certificate2 function, the number of robot states (x) must be equal to the number of robot single integrator velocity commands (dxi). Recieved a current robot pose input array (x) of size %r x %r and single integrator velocity array (dxi) of size %r x %r.' % (x.shape[0], x.shape[1], dxi.shape[0], dxi.shape[1])
-
-        
         # Initialize some variables for computational savings
         N = dxi.shape[1]
         num_constraints = int(comb(N, 2))
@@ -251,111 +293,142 @@ def create_single_integrator_barrier_certificate2(barrier_gain=100, unsafe_barri
 
     return f
 
-def create_unicycle_barrier_certificate(barrier_gain=100, safety_radius=0.12, projection_distance=0.05, magnitude_limit=0.2):
-    """ Creates a unicycle barrier cetifcate to avoid collisions. Uses the diffeomorphism mapping
-    and single integrator implementation. For optimization purposes, this function returns 
-    another function.
 
-    barrier_gain: double (how fast the robots can approach each other)
-    safety_radius: double (how far apart the robots should stay)
-    projection_distance: double (how far ahead to place the bubble)
+def create_unicycle_barrier_certificate(
+        barrier_gain: Union[int, float] = 100,
+        safety_radius: float = 0.12,
+        projection_distance: float = 0.05,
+        magnitude_limit: float = 0.2) -> Callable:
+    """Create a unicycle barrier cetifcate to avoid collisions.
 
-    -> function (the unicycle barrier certificate function)
+    Uses the diffeomorphism mapping and single integrator implementation. NOTE: 
+    For optimization purposes, this function returns another function.
+
+    Parameters
+    ----------
+    barrier_gain : float
+        How fast the robots can approach each other.
+    safety_radius : float
+        How far apart the robots should stay.
+    projection_distance : float
+        How far ahead to place the bubble.
+
+    Returns
+    -------
+    A callable function (the unicycle barrier certificate function).
     """
+    # Check user input types
+    assert isinstance(barrier_gain, (int, float)), f'In the function create_unicycle_barrier_certificate, the barrier gain (barrier_gain) must be an integer or float. Recieved type {type(barrier_gain).__name__}.'
+    assert isinstance(safety_radius, (int, float)), f'In the function create_unicycle_barrier_certificate, the safe distance between robots (safety_radius) must be an integer or float. Recieved type {type(safety_radius).__name__}.'
+    assert isinstance(projection_distance, (int, float)), f'In the function create_unicycle_barrier_certificate, the projected point distance for the diffeomorphism between sinlge integrator and unicycle (projection_distance) must be an integer or float. Recieved type {type(projection_distance).__name__}.'
+    assert isinstance(magnitude_limit, (int, float)), f'In the function create_unicycle_barrier_certificate, the maximum linear velocity of the robot (magnitude_limit) must be an integer or float. Recieved type {type(magnitude_limit).__name__}.'
 
-    #Check user input types
-    assert isinstance(barrier_gain, (int, float)), 'In the function create_unicycle_barrier_certificate, the barrier gain (barrier_gain) must be an integer or float. Recieved type %r.' % type(barrier_gain).__name__
-    assert isinstance(safety_radius, (int, float)), 'In the function create_unicycle_barrier_certificate, the safe distance between robots (safety_radius) must be an integer or float. Recieved type %r.' % type(safety_radius).__name__
-    assert isinstance(projection_distance, (int, float)), 'In the function create_unicycle_barrier_certificate, the projected point distance for the diffeomorphism between sinlge integrator and unicycle (projection_distance) must be an integer or float. Recieved type %r.' % type(projection_distance).__name__
-    assert isinstance(magnitude_limit, (int, float)), 'In the function create_unicycle_barrier_certificate, the maximum linear velocity of the robot (magnitude_limit) must be an integer or float. Recieved type %r.' % type(magnitude_limit).__name__
+    # Check user input ranges/sizes
+    assert barrier_gain > 0, f'In the function create_unicycle_barrier_certificate, the barrier gain (barrier_gain) must be positive. Recieved {barrier_gain}.'
+    assert safety_radius >= 0.12, f'In the function create_unicycle_barrier_certificate, the safe distance between robots (safety_radius) must be greater than or equal to the diameter of the robot (0.12m). Recieved {safety_radius}.'
+    assert projection_distance > 0, f'In the function create_unicycle_barrier_certificate, the projected point distance for the diffeomorphism between sinlge integrator and unicycle (projection_distance) must be positive. Recieved {projection_distance}.'
+    assert magnitude_limit > 0, f'In the function create_unicycle_barrier_certificate, the maximum linear velocity of the robot (magnitude_limit) must be positive. Recieved {magnitude_limit}.'
+    assert magnitude_limit <= 0.2, f'In the function create_unicycle_barrier_certificate, the maximum linear velocity of the robot (magnitude_limit) must be less than the max speed of the robot (0.2m/s). Recieved {magnitude_limit}.'
 
-    #Check user input ranges/sizes
-    assert barrier_gain > 0, 'In the function create_unicycle_barrier_certificate, the barrier gain (barrier_gain) must be positive. Recieved %r.' % barrier_gain
-    assert safety_radius >= 0.12, 'In the function create_unicycle_barrier_certificate, the safe distance between robots (safety_radius) must be greater than or equal to the diameter of the robot (0.12m). Recieved %r.' % safety_radius
-    assert projection_distance > 0, 'In the function create_unicycle_barrier_certificate, the projected point distance for the diffeomorphism between sinlge integrator and unicycle (projection_distance) must be positive. Recieved %r.' % projection_distance
-    assert magnitude_limit > 0, 'In the function create_unicycle_barrier_certificate, the maximum linear velocity of the robot (magnitude_limit) must be positive. Recieved %r.' % magnitude_limit
-    assert magnitude_limit <= 0.2, 'In the function create_unicycle_barrier_certificate, the maximum linear velocity of the robot (magnitude_limit) must be less than the max speed of the robot (0.2m/s). Recieved %r.' % magnitude_limit
+    si_barrier_cert = create_single_integrator_barrier_certificate(
+        barrier_gain=barrier_gain,
+        safety_radius=safety_radius+projection_distance)
 
+    si_to_uni_dyn, uni_to_si_states = create_si_to_uni_mapping(
+        projection_distance=projection_distance)
 
-    si_barrier_cert = create_single_integrator_barrier_certificate(barrier_gain=barrier_gain, safety_radius=safety_radius+projection_distance)
+    uni_to_si_dyn = create_uni_to_si_dynamics(
+        projection_distance=projection_distance)
 
-    si_to_uni_dyn, uni_to_si_states = create_si_to_uni_mapping(projection_distance=projection_distance)
+    def f(dxu: np.ndarray, x: np.ndarray) -> np.ndarray:
+        # Check user input types
+        assert isinstance(dxu, np.ndarray), f'In the function created by the create_unicycle_barrier_certificate function, the unicycle robot velocity command (dxu) must be a numpy array. Recieved type {type(dxu).__name__}.'
+        assert isinstance(x, np.ndarray), f'In the function created by the create_unicycle_barrier_certificate function, the robot states (x) must be a numpy array. Recieved type {type(x).__name__}.'
 
-    uni_to_si_dyn = create_uni_to_si_dynamics(projection_distance=projection_distance)
-
-    def f(dxu, x):
-        #Check user input types
-        assert isinstance(dxu, np.ndarray), 'In the function created by the create_unicycle_barrier_certificate function, the unicycle robot velocity command (dxu) must be a numpy array. Recieved type %r.' % type(dxu).__name__
-        assert isinstance(x, np.ndarray), 'In the function created by the create_unicycle_barrier_certificate function, the robot states (x) must be a numpy array. Recieved type %r.' % type(x).__name__
-
-        #Check user input ranges/sizes
-        assert x.shape[0] == 3, 'In the function created by the create_unicycle_barrier_certificate function, the dimension of the unicycle robot states (x) must be 3 ([x;y;theta]). Recieved dimension %r.' % x.shape[0]
-        assert dxu.shape[0] == 2, 'In the function created by the create_unicycle_barrier_certificate function, the dimension of the robot unicycle velocity command (dxu) must be 2 ([v;w]). Recieved dimension %r.' % dxu.shape[0]
-        assert x.shape[1] == dxu.shape[1], 'In the function created by the create_unicycle_barrier_certificate function, the number of robot states (x) must be equal to the number of robot unicycle velocity commands (dxu). Recieved a current robot pose input array (x) of size %r x %r and single integrator velocity array (dxi) of size %r x %r.' % (x.shape[0], x.shape[1], dxu.shape[0], dxu.shape[1])
-
+        # Check user input ranges/sizes
+        assert x.shape[0] == 3, f'In the function created by the create_unicycle_barrier_certificate function, the dimension of the unicycle robot states (x) must be 3 ([x;y;theta]). Recieved dimension {x.shape[0]}.'
+        assert dxu.shape[0] == 2, f'In the function created by the create_unicycle_barrier_certificate function, the dimension of the robot unicycle velocity command (dxu) must be 2 ([v;w]). Recieved dimension {dxu.shape[0]}.'
+        assert x.shape[1] == dxu.shape[1], f'In the function created by the create_unicycle_barrier_certificate function, the number of robot states (x) must be equal to the number of robot unicycle velocity commands (dxu). Recieved a current robot pose input array (x) of size {x.shape[0]} x {x.shape[1]} and single integrator velocity array (dxi) of size {dxu.shape[0]} x {dxu.shape[1]}.'
 
         x_si = uni_to_si_states(x)
-        #Convert unicycle control command to single integrator one
+        # Convert unicycle control command to single integrator one
         dxi = uni_to_si_dyn(dxu, x)
-        #Apply single integrator barrier certificate
+        # Apply single integrator barrier certificate
         dxi = si_barrier_cert(dxi, x_si)
-        #Return safe unicycle command
+        # Return safe unicycle command
         return si_to_uni_dyn(dxi, x)
 
     return f
 
-def create_unicycle_barrier_certificate_with_boundary(barrier_gain=100, safety_radius=0.12, projection_distance=0.05, magnitude_limit=0.2, boundary_points = np.array([-1.6, 1.6, -1.0, 1.0])):
-    """ Creates a unicycle barrier cetifcate to avoid collisions. Uses the diffeomorphism mapping
-    and single integrator implementation. For optimization purposes, this function returns 
-    another function.
 
-    barrier_gain: double (how fast the robots can approach each other)
-    safety_radius: double (how far apart the robots should stay)
-    projection_distance: double (how far ahead to place the bubble)
+def create_unicycle_barrier_certificate_with_boundary(
+        barrier_gain: Union[int, float] = 100,
+        safety_radius: float = 0.12,
+        projection_distance: float = 0.05,
+        magnitude_limit: float = 0.2,
+        boundary_points: np.ndarray = np.array([-1.6, 1.6, -1.0, 1.0])) -> Callable:
+    """Creates a unicycle barrier cetifcate to avoid collisions.
 
-    -> function (the unicycle barrier certificate function)
+    Uses the diffeomorphism mapping and single integrator implementation. NOTE:
+    For optimization purposes, this function returns another function.
+
+    Parameters
+    ----------
+    barrier_gain : float
+        How fast the robots can approach each other.
+    safety_radius : float
+        How far apart the robots should stay.
+    projection_distance : float
+        How far ahead to place the bubble.
+
+    Returns
+    -------
+    A callable function (the unicycle barrier certificate function).
     """
+    # Check user input types
+    assert isinstance(barrier_gain, (int, float)), f'In the function create_unicycle_barrier_certificate, the barrier gain (barrier_gain) must be an integer or float. Recieved type {type(barrier_gain).__name__}.'
+    assert isinstance(safety_radius, (int, float)), f'In the function create_unicycle_barrier_certificate, the safe distance between robots (safety_radius) must be an integer or float. Recieved type {type(safety_radius).__name__}.'
+    assert isinstance(projection_distance, (int, float)), f'In the function create_unicycle_barrier_certificate, the projected point distance for the diffeomorphism between sinlge integrator and unicycle (projection_distance) must be an integer or float. Recieved type {type(projection_distance).__name__}.'
+    assert isinstance(magnitude_limit, (int, float)), f'In the function create_unicycle_barrier_certificate, the maximum linear velocity of the robot (magnitude_limit) must be an integer or float. Recieved type {type(magnitude_limit).__name__}.'
 
-    #Check user input types
-    assert isinstance(barrier_gain, (int, float)), 'In the function create_unicycle_barrier_certificate, the barrier gain (barrier_gain) must be an integer or float. Recieved type %r.' % type(barrier_gain).__name__
-    assert isinstance(safety_radius, (int, float)), 'In the function create_unicycle_barrier_certificate, the safe distance between robots (safety_radius) must be an integer or float. Recieved type %r.' % type(safety_radius).__name__
-    assert isinstance(projection_distance, (int, float)), 'In the function create_unicycle_barrier_certificate, the projected point distance for the diffeomorphism between sinlge integrator and unicycle (projection_distance) must be an integer or float. Recieved type %r.' % type(projection_distance).__name__
-    assert isinstance(magnitude_limit, (int, float)), 'In the function create_unicycle_barrier_certificate, the maximum linear velocity of the robot (magnitude_limit) must be an integer or float. Recieved type %r.' % type(magnitude_limit).__name__
+    # Check user input ranges/sizes
+    assert barrier_gain > 0, f'In the function create_unicycle_barrier_certificate, the barrier gain (barrier_gain) must be positive. Recieved {barrier_gain}.'
+    assert safety_radius >= 0.12, f'In the function create_unicycle_barrier_certificate, the safe distance between robots (safety_radius) must be greater than or equal to the diameter of the robot (0.12m). Recieved {safety_radius}.'
+    assert projection_distance > 0, f'In the function create_unicycle_barrier_certificate, the projected point distance for the diffeomorphism between sinlge integrator and unicycle (projection_distance) must be positive. Recieved {projection_distance}.'
+    assert magnitude_limit > 0, f'In the function create_unicycle_barrier_certificate, the maximum linear velocity of the robot (magnitude_limit) must be positive. Recieved {magnitude_limit}.'
+    assert magnitude_limit <= 0.2, f'In the function create_unicycle_barrier_certificate, the maximum linear velocity of the robot (magnitude_limit) must be less than the max speed of the robot (0.2m/s). Recieved {magnitude_limit}.'
 
-    #Check user input ranges/sizes
-    assert barrier_gain > 0, 'In the function create_unicycle_barrier_certificate, the barrier gain (barrier_gain) must be positive. Recieved %r.' % barrier_gain
-    assert safety_radius >= 0.12, 'In the function create_unicycle_barrier_certificate, the safe distance between robots (safety_radius) must be greater than or equal to the diameter of the robot (0.12m). Recieved %r.' % safety_radius
-    assert projection_distance > 0, 'In the function create_unicycle_barrier_certificate, the projected point distance for the diffeomorphism between sinlge integrator and unicycle (projection_distance) must be positive. Recieved %r.' % projection_distance
-    assert magnitude_limit > 0, 'In the function create_unicycle_barrier_certificate, the maximum linear velocity of the robot (magnitude_limit) must be positive. Recieved %r.' % magnitude_limit
-    assert magnitude_limit <= 0.2, 'In the function create_unicycle_barrier_certificate, the maximum linear velocity of the robot (magnitude_limit) must be less than the max speed of the robot (0.2m/s). Recieved %r.' % magnitude_limit
+    si_barrier_cert = create_single_integrator_barrier_certificate_with_boundary(
+        barrier_gain=barrier_gain,
+        safety_radius=safety_radius+projection_distance,
+        boundary_points=boundary_points)
 
+    si_to_uni_dyn, uni_to_si_states = create_si_to_uni_mapping(
+        projection_distance=projection_distance)
 
-    si_barrier_cert = create_single_integrator_barrier_certificate_with_boundary(barrier_gain=barrier_gain, safety_radius=safety_radius+projection_distance, boundary_points=boundary_points)
+    uni_to_si_dyn = create_uni_to_si_dynamics(
+        projection_distance=projection_distance)
 
-    si_to_uni_dyn, uni_to_si_states = create_si_to_uni_mapping(projection_distance=projection_distance)
+    def f(dxu: np.ndarray, x: np.ndarray) -> np.ndarray:
+        # Check user input types
+        assert isinstance(dxu, np.ndarray), f'In the function created by the create_unicycle_barrier_certificate function, the unicycle robot velocity command (dxu) must be a numpy array. Recieved type {type(dxu).__name__}.'
+        assert isinstance(x, np.ndarray), f'In the function created by the create_unicycle_barrier_certificate function, the robot states (x) must be a numpy array. Recieved type {type(x).__name__}.'
 
-    uni_to_si_dyn = create_uni_to_si_dynamics(projection_distance=projection_distance)
-
-    def f(dxu, x):
-        #Check user input types
-        assert isinstance(dxu, np.ndarray), 'In the function created by the create_unicycle_barrier_certificate function, the unicycle robot velocity command (dxu) must be a numpy array. Recieved type %r.' % type(dxu).__name__
-        assert isinstance(x, np.ndarray), 'In the function created by the create_unicycle_barrier_certificate function, the robot states (x) must be a numpy array. Recieved type %r.' % type(x).__name__
-
-        #Check user input ranges/sizes
-        assert x.shape[0] == 3, 'In the function created by the create_unicycle_barrier_certificate function, the dimension of the unicycle robot states (x) must be 3 ([x;y;theta]). Recieved dimension %r.' % x.shape[0]
-        assert dxu.shape[0] == 2, 'In the function created by the create_unicycle_barrier_certificate function, the dimension of the robot unicycle velocity command (dxu) must be 2 ([v;w]). Recieved dimension %r.' % dxu.shape[0]
-        assert x.shape[1] == dxu.shape[1], 'In the function created by the create_unicycle_barrier_certificate function, the number of robot states (x) must be equal to the number of robot unicycle velocity commands (dxu). Recieved a current robot pose input array (x) of size %r x %r and single integrator velocity array (dxi) of size %r x %r.' % (x.shape[0], x.shape[1], dxu.shape[0], dxu.shape[1])
-
+        # Check user input ranges/sizes
+        assert x.shape[0] == 3, f'In the function created by the create_unicycle_barrier_certificate function, the dimension of the unicycle robot states (x) must be 3 ([x;y;theta]). Recieved dimension {x.shape[0]}.'
+        assert dxu.shape[0] == 2, f'In the function created by the create_unicycle_barrier_certificate function, the dimension of the robot unicycle velocity command (dxu) must be 2 ([v;w]). Recieved dimension {dxu.shape[0]}.'
+        assert x.shape[1] == dxu.shape[1], f'In the function created by the create_unicycle_barrier_certificate function, the number of robot states (x) must be equal to the number of robot unicycle velocity commands (dxu). Recieved a current robot pose input array (x) of size {x.shape[0]} x {x.shape[1]} and single integrator velocity array (dxu) of size {dxu.shape[0]} x {dxu.shape[1]}.'
 
         x_si = uni_to_si_states(x)
-        #Convert unicycle control command to single integrator one
+        # Convert unicycle control command to single integrator one
         dxi = uni_to_si_dyn(dxu, x)
-        #Apply single integrator barrier certificate
+        # Apply single integrator barrier certificate
         dxi = si_barrier_cert(dxi, x_si)
-        #Return safe unicycle command
+        # Return safe unicycle command
         return si_to_uni_dyn(dxi, x)
 
     return f
+
 
 def create_unicycle_barrier_certificate2(barrier_gain=500, unsafe_barrier_gain=1e6, safety_radius=0.12, projection_distance=0.05, magnitude_limit=0.2):
     """ Creates a unicycle barrier cetifcate to avoid collisions. Uses the diffeomorphism mapping
@@ -370,20 +443,19 @@ def create_unicycle_barrier_certificate2(barrier_gain=500, unsafe_barrier_gain=1
     """
 
     #Check user input types
-    assert isinstance(barrier_gain, (int, float)), 'In the function create_unicycle_barrier_certificate2, the barrier gain inside the safe set (barrier_gain) must be an integer or float. Recieved type %r.' % type(barrier_gain).__name__
-    assert isinstance(unsafe_barrier_gain, (int, float)), 'In the function create_unicycle_barrier_certificate2, the barrier gain outside the safe set (unsafe_barrier_gain) must be an integer or float. Recieved type %r.' % type(unsafe_barrier_gain).__name__
-    assert isinstance(safety_radius, (int, float)), 'In the function create_unicycle_barrier_certificate2, the safe distance between robots (safety_radius) must be an integer or float. Recieved type %r.' % type(safety_radius).__name__
-    assert isinstance(projection_distance, (int, float)), 'In the function create_unicycle_barrier_certificate2, the projected point distance for the diffeomorphism between sinlge integrator and unicycle (projection_distance) must be an integer or float. Recieved type %r.' % type(projection_distance).__name__
-    assert isinstance(magnitude_limit, (int, float)), 'In the function create_unicycle_barrier_certificate2, the maximum linear velocity of the robot (magnitude_limit) must be an integer or float. Recieved type %r.' % type(magnitude_limit).__name__
+    assert isinstance(barrier_gain, (int, float)), f'In the function create_unicycle_barrier_certificate2, the barrier gain inside the safe set (barrier_gain) must be an integer or float. Recieved type {type(barrier_gain).__name__}.'
+    assert isinstance(unsafe_barrier_gain, (int, float)), f'In the function create_unicycle_barrier_certificate2, the barrier gain outside the safe set (unsafe_barrier_gain) must be an integer or float. Recieved type {type(unsafe_barrier_gain).__name__}.'
+    assert isinstance(safety_radius, (int, float)), f'In the function create_unicycle_barrier_certificate2, the safe distance between robots (safety_radius) must be an integer or float. Recieved type {type(safety_radius).__name__}.'
+    assert isinstance(projection_distance, (int, float)), f'In the function create_unicycle_barrier_certificate2, the projected point distance for the diffeomorphism between sinlge integrator and unicycle (projection_distance) must be an integer or float. Recieved type {type(projection_distance).__name__}.'
+    assert isinstance(magnitude_limit, (int, float)), f'In the function create_unicycle_barrier_certificate2, the maximum linear velocity of the robot (magnitude_limit) must be an integer or float. Recieved type {type(magnitude_limit).__name__}.'
 
     #Check user input ranges/sizes
-    assert barrier_gain > 0, 'In the function create_unicycle_barrier_certificate2, the barrier gain inside the safe set (barrier_gain) must be positive. Recieved %r.' % barrier_gain
-    assert unsafe_barrier_gain > 0, 'In the function create_unicycle_barrier_certificate2, the barrier gain outside the safe set (unsafe_barrier_gain) must be positive. Recieved %r.' % unsafe_barrier_gain
-    assert safety_radius >= 0.12, 'In the function create_unicycle_barrier_certificate2, the safe distance between robots (safety_radius) must be greater than or equal to the diameter of the robot (0.12m). Recieved %r.' % safety_radius
-    assert projection_distance > 0, 'In the function create_unicycle_barrier_certificate2, the projected point distance for the diffeomorphism between sinlge integrator and unicycle (projection_distance) must be positive. Recieved %r.' % projection_distance
-    assert magnitude_limit > 0, 'In the function create_unicycle_barrier_certificate2, the maximum linear velocity of the robot (magnitude_limit) must be positive. Recieved %r.' % magnitude_limit
-    assert magnitude_limit <= 0.2, 'In the function create_unicycle_barrier_certificate2, the maximum linear velocity of the robot (magnitude_limit) must be less than the max speed of the robot (0.2m/s). Recieved %r.' % magnitude_limit
-
+    assert barrier_gain > 0, f'In the function create_unicycle_barrier_certificate2, the barrier gain inside the safe set (barrier_gain) must be positive. Recieved {barrier_gain}.'
+    assert unsafe_barrier_gain > 0, f'In the function create_unicycle_barrier_certificate2, the barrier gain outside the safe set (unsafe_barrier_gain) must be positive. Recieved {unsafe_barrier_gain}.'
+    assert safety_radius >= 0.12, f'In the function create_unicycle_barrier_certificate2, the safe distance between robots (safety_radius) must be greater than or equal to the diameter of the robot (0.12m). Recieved {safety_radius}.'
+    assert projection_distance > 0, f'In the function create_unicycle_barrier_certificate2, the projected point distance for the diffeomorphism between sinlge integrator and unicycle (projection_distance) must be positive. Recieved {projection_distance}.'
+    assert magnitude_limit > 0, f'In the function create_unicycle_barrier_certificate2, the maximum linear velocity of the robot (magnitude_limit) must be positive. Recieved {magnitude_limit}.'
+    assert magnitude_limit <= 0.2, f'In the function create_unicycle_barrier_certificate2, the maximum linear velocity of the robot (magnitude_limit) must be less than the max speed of the robot (0.2m/s). Recieved {magnitude_limit}.'
 
     si_barrier_cert = create_single_integrator_barrier_certificate2(barrier_gain=barrier_gain, unsafe_barrier_gain=unsafe_barrier_gain, safety_radius=safety_radius+projection_distance)
 
@@ -391,16 +463,15 @@ def create_unicycle_barrier_certificate2(barrier_gain=500, unsafe_barrier_gain=1
 
     uni_to_si_dyn = create_uni_to_si_dynamics(projection_distance=projection_distance)
 
-    def f(dxu, x):
+    def f(dxu: np.ndarray, x: np.ndarray) -> np.ndarray:
         #Check user input types
-        assert isinstance(dxu, np.ndarray), 'In the function created by the create_unicycle_barrier_certificate function, the unicycle robot velocity command (dxu) must be a numpy array. Recieved type %r.' % type(dxu).__name__
-        assert isinstance(x, np.ndarray), 'In the function created by the create_unicycle_barrier_certificate function, the robot states (x) must be a numpy array. Recieved type %r.' % type(x).__name__
+        assert isinstance(dxu, np.ndarray), f'In the function created by the create_unicycle_barrier_certificate function, the unicycle robot velocity command (dxu) must be a numpy array. Recieved type {type(dxu).__name__}.'
+        assert isinstance(x, np.ndarray), f'In the function created by the create_unicycle_barrier_certificate function, the robot states (x) must be a numpy array. Recieved type {type(x).__name__}.'
 
         #Check user input ranges/sizes
-        assert x.shape[0] == 3, 'In the function created by the create_unicycle_barrier_certificate function, the dimension of the unicycle robot states (x) must be 3 ([x;y;theta]). Recieved dimension %r.' % x.shape[0]
-        assert dxu.shape[0] == 2, 'In the function created by the create_unicycle_barrier_certificate function, the dimension of the robot unicycle velocity command (dxu) must be 2 ([v;w]). Recieved dimension %r.' % dxu.shape[0]
-        assert x.shape[1] == dxu.shape[1], 'In the function created by the create_unicycle_barrier_certificate function, the number of robot states (x) must be equal to the number of robot unicycle velocity commands (dxu). Recieved a current robot pose input array (x) of size %r x %r and single integrator velocity array (dxi) of size %r x %r.' % (x.shape[0], x.shape[1], dxu.shape[0], dxu.shape[1])
-
+        assert x.shape[0] == 3, f'In the function created by the create_unicycle_barrier_certificate function, the dimension of the unicycle robot states (x) must be 3 ([x;y;theta]). Recieved dimension {x.shape[0]}.'
+        assert dxu.shape[0] == 2, f'In the function created by the create_unicycle_barrier_certificate function, the dimension of the robot unicycle velocity command (dxu) must be 2 ([v;w]). Recieved dimension {dxu.shape[0]}.'
+        assert x.shape[1] == dxu.shape[1], f'In the function created by the create_unicycle_barrier_certificate function, the number of robot states (x) must be equal to the number of robot unicycle velocity commands (dxu). Recieved a current robot pose input array (x) of size {x.shape[0]} x {x.shape[1]} and single integrator velocity array (dxu) of size {dxu.shape[0]} x {dxu.shape[1]}.'
 
         x_si = uni_to_si_states(x)
         #Convert unicycle control command to single integrator one
@@ -412,14 +483,26 @@ def create_unicycle_barrier_certificate2(barrier_gain=500, unsafe_barrier_gain=1
 
     return f
 
-def create_unicycle_differential_drive_barrier_certificate(max_num_obstacle_points = 100, max_num_robots = 30, disturbance = 5, wheel_vel_limit = 12.5, base_length = 0.105, wheel_radius = 0.016,
-    projection_distance =0.05, barrier_gain = 150, safety_radius = 0.17):
-    
 
-    D = np.matrix([[wheel_radius/2, wheel_radius/2], [-wheel_radius/base_length, wheel_radius/base_length]])
-    L = np.matrix([[1,0],[0,projection_distance]])* D
-    disturb = np.matrix([[-disturbance, -disturbance, disturbance, disturbance],[-disturbance, disturbance, disturbance, -disturbance]])
-    num_disturbs = np.size(disturb[1,:])
+def create_unicycle_differential_drive_barrier_certificate(
+        max_num_obstacle_points: int = 100,
+        max_num_robots: int = 30,
+        disturbance: Union[int, float] = 5,
+        wheel_vel_limit: float = 12.5,
+        base_length: float = 0.105,
+        wheel_radius: float = 0.016,
+        projection_distance: float = 0.05,
+        barrier_gain: float = 150,
+        safety_radius: float = 0.17) -> Callable:
+    """Create a unicycle differential drive barrier certificate."""
+    D = np.matrix([
+        [wheel_radius/2, wheel_radius/2],
+        [-wheel_radius/base_length, wheel_radius/base_length]])
+    L = np.matrix([[1, 0], [0, projection_distance]])* D
+    disturb = np.matrix([
+        [-disturbance, -disturbance, disturbance, disturbance],
+        [-disturbance, disturbance, disturbance, -disturbance]])
+    num_disturbs = np.size(disturb[1, :])
 
     max_num_constraints = (max_num_robots**2-max_num_robots)//2 + max_num_robots*max_num_obstacle_points
     A = np.matrix(np.zeros([max_num_constraints, 2*max_num_robots]))
@@ -429,19 +512,18 @@ def create_unicycle_differential_drive_barrier_certificate(max_num_obstacle_poin
     Ms = np.matrix(np.zeros([2,2*max_num_robots]))
 
     def robust_barriers(dxu, x, obstacles=np.empty(0)):
-
-        num_robots = np.size(dxu[0,:])
+        """Create robust barriers."""
+        num_robots = np.size(dxu[0, :])
 
         if obstacles.size != 0:
             num_obstacles = np.size(obstacles[0,:])
         else:
             num_obstacles = 0
 
-        if(num_robots < 2):
+        if num_robots < 2:
             temp = 0
         else:
             temp = (num_robots**2-num_robots)//2
-
 
         # Generate constraints for barrier certificates based on the size of the safety radius
         num_constraints = temp + num_robots*num_obstacles
@@ -511,7 +593,7 @@ def create_unicycle_differential_drive_barrier_certificate(max_num_obstacle_poin
         #vnew2 = solvers.qp(matrix(H), matrix(f), -matrix(A[0:count,0:2*num_robots]), -matrix( b[0:count]))['x'] # , A, b) Omit last 2 arguments since our QP has no equality constraints
         #print('Time Taken by cvxOpt: {} s'.format(time.time() - start))
 
-        vnew = solver2.solve_qp(H, -np.squeeze(np.array(f)), A[0:count,0:2*num_robots].T, np.squeeze(np.array(b[0:count])))[0]
+        vnew = solver2.solve_qp(H, -np.squeeze(np.array(f)), A[0:count, 0:2*num_robots].T, np.squeeze(np.array(b[0:count])))[0]
         # Initial Guess for Solver at the Next Iteration
         # vnew = quadprog(H, double(f), -A(1:num_constraints,1:2*num_robots), -b(1:num_constraints), [], [], -wheel_vel_limit*ones(2*num_robots,1), wheel_vel_limit*ones(2*num_robots,1), [], opts);
         # Set robot velocities to new velocities
@@ -522,13 +604,26 @@ def create_unicycle_differential_drive_barrier_certificate(max_num_obstacle_poin
 
     return robust_barriers
 
-def create_unicycle_differential_drive_barrier_certificate_with_boundary(max_num_obstacle_points = 100, max_num_robots = 30, disturbance = 5, wheel_vel_limit = 12.5, base_length = 0.105, wheel_radius = 0.016,
-    projection_distance =0.05, barrier_gain = 150, safety_radius = 0.17, boundary_points = np.array([-1.6, 1.6, -1.0, 1.0])):
-    
 
-    D = np.array([[wheel_radius/2, wheel_radius/2], [-wheel_radius/base_length, wheel_radius/base_length]])
-    L = np.array([[1,0],[0,projection_distance]]).dot(D)
-    disturb = np.array([[-disturbance, -disturbance, disturbance, disturbance],[-disturbance, disturbance, disturbance, -disturbance]])
+def create_unicycle_differential_drive_barrier_certificate_with_boundary(
+        max_num_obstacle_points: int = 100,
+        max_num_robots: int = 30,
+        disturbance: Union[int, float] = 5,
+        wheel_vel_limit: float = 12.5,
+        base_length: float = 0.105,
+        wheel_radius: float = 0.016,
+        projection_distance: float = 0.05,
+        barrier_gain: float = 150,
+        safety_radius: float = 0.17,
+        boundary_points: np.ndarray = np.array([-1.6, 1.6, -1.0, 1.0])):
+    """Create a unicycle differential drive barrier certificate w/ boundary."""
+    D = np.array([
+        [wheel_radius/2, wheel_radius/2],
+        [-wheel_radius/base_length, wheel_radius/base_length]])
+    L = np.array([[1, 0],[0, projection_distance]]).dot(D)
+    disturb = np.array([
+        [-disturbance, -disturbance, disturbance, disturbance],
+        [-disturbance, disturbance, disturbance, -disturbance]])
     num_disturbs = disturb.shape[1]
 
     max_num_constraints = (max_num_robots**2-max_num_robots)//2 + max_num_robots*max_num_obstacle_points
@@ -539,7 +634,7 @@ def create_unicycle_differential_drive_barrier_certificate_with_boundary(max_num
     Ms = np.zeros([2,2*max_num_robots])
 
     def robust_barriers(dxu, x, obstacles=np.empty(0)):
-
+        """Create robust barriers."""
         num_robots = np.size(dxu[0,:])
 
         if obstacles.size != 0:
@@ -547,7 +642,7 @@ def create_unicycle_differential_drive_barrier_certificate_with_boundary(max_num
         else:
             num_obstacles = 0
 
-        if(num_robots < 2):
+        if num_robots < 2:
             temp = 0
         else:
             temp = (num_robots**2-num_robots)//2
