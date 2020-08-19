@@ -85,6 +85,18 @@ You should get the following arena:
 Congratulations! You have now started your first ROS2 Robotarium simulation!
 
 
+## Running an example code
+
+Provided within this metapackage is an additional one called `robotarium_examples` containing a series of example code provided by the original Georgia Tech 2D `robotarium-python-simulator`. This code is unmodified except for syntax fixes and rearrangement to conform to a ROS2 package structure. These examples provided by the Robotarium team are a great resource to learn how to move the robots within the arena.
+
+The example we will run now is the `si_go_to_point` example. This will make 5 robots move move to a randomly generated point on the Robotarium arena using a single-integrator controller. To run the example, make sure you spawned the Robotarium like in the previous example, and run:
+
+```bash
+~$ ros2 run robotarium_example si_go_to_point
+```
+
+And now you will notice 5 robots begin moving to points on the arena!
+
 ## Tutorials
 
 **UNDER CONSTRUCTION**
