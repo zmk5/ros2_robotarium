@@ -4,6 +4,7 @@ Written by: The Robotarium Team
 Modified by: Zahi Kakish (zmk5)
 
 """
+import functools
 import math
 import time
 from typing import Tuple
@@ -65,7 +66,7 @@ class Robotarium(RobotariumABC):
             self._msg[i] = Twist()
             self._sub[i] = self._node.create_subscription(
                 Odometry, f'/gb_{i}/odom',
-                lambda msg: self._odom_callback(msg, i), 10)
+                functools.partial(self._odom_callback, robot_id=i), 10)
 
     def get_poses(self) -> np.ndarray:
         """Return the states of the agents.
@@ -89,7 +90,7 @@ class Robotarium(RobotariumABC):
         """
         self._node.get_logger().warn('##### DEBUG OUTPUT #####')
         self._node.get_logger().info(
-            f'{math.ceil(self._iterations*0.033)} real seconds when ' +
+            f'{math.ceil(self._iterations * 0.033)} real seconds when ' +
             'deployed on the Robotarium.')
 
         # Shutdown node and ROS2
@@ -131,42 +132,23 @@ class Robotarium(RobotariumABC):
         self.poses[0, :] = self.poses[0, :] + self.time_step * np.cos(self.poses[2, :]) * self.velocities[0, :]
         self.poses[1, :] = self.poses[1, :] + self.time_step * np.sin(self.poses[2, :]) * self.velocities[0, :]
         self.poses[2, :] = self.poses[2, :] + self.time_step * self.velocities[1, :]
+
         # Ensure angles are wrapped
         self.poses[2, :] = np.arctan2(
             np.sin(self.poses[2, :]), np.cos(self.poses[2, :]))
 
         # Update graphics
-        if self.show_figure:
+        if self.show_figure:  # TODO: Remove this.
             if self.sim_in_real_time:
                 t = time.time()
                 while t - self.previous_render_time < self.time_step:
                     t = time.time()
                 self.previous_render_time = t
 
-            # for i in range(self.number_of_robots):
-            #     self.chassis_patches[i].center = self.poses[:2, i]
-            #     self.chassis_patches[i].orientation = self.poses[2, i] + math.pi/4
-
-            #     self.right_wheel_patches[i].center = self.poses[:2, i]+self.robot_radius*np.array((np.cos(self.poses[2, i]+math.pi/2), np.sin(self.poses[2, i]+math.pi/2)))+\
-            #                                 0.04*np.array((-np.sin(self.poses[2, i]+math.pi/2), np.cos(self.poses[2, i]+math.pi/2)))
-            #     self.right_wheel_patches[i].orientation = self.poses[2, i] + math.pi/4
-
-            #     self.left_wheel_patches[i].center = self.poses[:2, i]+self.robot_radius*np.array((np.cos(self.poses[2, i]-math.pi/2), np.sin(self.poses[2, i]-math.pi/2)))+\
-            #                                 0.04*np.array((-np.sin(self.poses[2, i]+math.pi/2), np.cos(self.poses[2, i]+math.pi/2)))
-            #     self.left_wheel_patches[i].orientation = self.poses[2,i] + math.pi/4
-
-            #     self.right_led_patches[i].center = self.poses[:2, i]+0.75*self.robot_radius*np.array((np.cos(self.poses[2,i]), np.sin(self.poses[2,i])))-\
-            #                         0.04*np.array((-np.sin(self.poses[2, i]), np.cos(self.poses[2, i])))
-            #     self.left_led_patches[i].center = self.poses[:2, i]+0.75*self.robot_radius*np.array((np.cos(self.poses[2,i]), np.sin(self.poses[2,i])))-\
-            #                         0.015*np.array((-np.sin(self.poses[2, i]), np.cos(self.poses[2, i])))
-
-            # self.figure.canvas.draw_idle()
-            # self.figure.canvas.flush_events()
-
         self._publish_cmd_vel()
         rclpy.spin_once(self._node)
 
-    def _publish_cmd_vel(self):
+    def _publish_cmd_vel(self) -> None:
         """Publish the new poses of the robots to the Gazebo simulator."""
         for i in range(self.number_of_robots):
             self._msg[i].linear.x = self.velocities[0, i]

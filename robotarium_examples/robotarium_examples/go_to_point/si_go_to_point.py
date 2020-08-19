@@ -6,14 +6,13 @@ Written by: The Robotarium Team
 Modified by: Zahi Kakish (zmk5)
 
 """
-import robotarium_node.robotarium as robotarium
+import numpy as np
+
+from robotarium_node.robotarium import Robotarium
 from robotarium_node.utilities.transformations import *
 from robotarium_node.utilities.barrier_certificates import *
 from robotarium_node.utilities.misc import *
 from robotarium_node.utilities.controllers import *
-
-import numpy as np
-import time
 
 
 def main() -> None:
@@ -23,7 +22,7 @@ def main() -> None:
     initial_conditions = np.array(
         np.mat('1 0.5 -0.5 0 0.28; 0.8 -0.3 -0.75 0.1 0.34; 0 0 0 0 0'))
 
-    r = robotarium.Robotarium(
+    r = Robotarium(
         number_of_robots=N, show_figure=True,
         initial_conditions=initial_conditions, sim_in_real_time=False)
 
@@ -49,7 +48,7 @@ def main() -> None:
 
     # While the number of robots at the required poses is less
     # than N...
-    while np.size(at_pose(np.vstack((x_si, x[2,:])), goal_points, rotation_error=100)) != N:
+    while np.size(at_pose(np.vstack((x_si, x[2, :])), goal_points, rotation_error=100)) != N:
         # Get poses of agents
         x = r.get_poses()
         x_si = uni_to_si_states(x)
@@ -66,6 +65,7 @@ def main() -> None:
         # Set the velocities by mapping the single-integrator inputs to unciycle
         # inputs.
         r.set_velocities(np.arange(N), dxu)
+
         # Iterate the simulation
         r.step()
 
