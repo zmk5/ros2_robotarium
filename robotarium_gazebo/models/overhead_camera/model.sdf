@@ -1,0 +1,47 @@
+<sdf version='1.7'>
+  <model name='overhead_camera'>
+    <link name='camera_link'>
+      <visual name='camera_link_visual'>
+        <pose>0 0 3.25 -1.5708 1.5708 0</pose>
+        <geometry>
+          <box>
+            <size>0.05 0.05 0.05</size>
+          </box>
+        </geometry>
+        <material>
+          <script>
+            <name>Gazebo/Black</name>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+          </script>
+        </material>
+      </visual>
+      <sensor name='overhead_camera' type='camera'>
+        <update_rate>30</update_rate>
+        <visualize>true</visualize>
+        <camera name='head'>
+          <horizontal_fov>1.39626</horizontal_fov>
+          <image>
+            <width>640</width>
+            <height>480</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.02</near>
+            <far>300</far>
+          </clip>
+          <noise>
+            <type>gaussian</type>
+            <mean>0</mean>
+            <stddev>0.007</stddev>
+          </noise>
+        </camera>
+        <plugin name='camera_controller' filename='libgazebo_ros_camera.so'>
+          <ros>
+            <namespace>overhead_camera</namespace>
+          </ros>
+        </plugin>
+        <pose>0 0 3.25 3.14159 1.57079 -1.57079</pose>
+      </sensor>
+    </link>
+  </model>
+</sdf>

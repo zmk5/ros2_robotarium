@@ -1,0 +1,33 @@
+<?xml version="1.0" ?>
+<sdf version="1.7">
+  <model name="robotarium_tabletop">
+    <static>true</static>
+    <pose>0 0 0 0 0 0</pose>
+    <link name="link">
+      <collision name="collision">
+        <geometry>
+          <mesh>
+            <uri>model://robotarium_tabletop/meshes/robotarium_tabletop.dae</uri>
+            <scale>1.0 1.0 1.0</scale>
+          </mesh>
+        </geometry>
+      </collision>
+      <visual name="visual">
+        <geometry>
+          <mesh>
+            <uri>model://robotarium_tabletop/meshes/robotarium_tabletop.dae</uri>
+            <scale>1.0 1.0 1.0</scale>
+          </mesh>
+        </geometry>
+        <material>
+          <script>
+            <uri>model://robotarium_tabletop/materials/scripts</uri>
+            <uri>model://robotarium_tabletop/materials/textures</uri>
+            <name>CheckeredGroundPlane1/Image</name>
+          </script>
+          <lighting>false</lighting>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>

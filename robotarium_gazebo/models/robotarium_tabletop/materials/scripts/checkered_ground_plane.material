@@ -1,0 +1,15 @@
+material CheckeredGroundPlane1/Image
+{
+    receive_shadows off
+    technique
+    {
+        pass
+        {
+            texture_unit
+            {
+                texture checkered_ground_plane1.jpg
+                scale 0.25 0.25
+            }
+        }
+    }
+}
